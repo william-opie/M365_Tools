@@ -46,7 +46,7 @@ Import-Module ExchangeOnlineManagement
 Clear-Host
 
 Do{
-    Write-Host "M365 Content Search Tool`n" -ForegroundColor GreenGet
+    Write-Host "M365 Content Search Tool`n" -ForegroundColor Green
     $GlobalAdmin = Read-Host "Enter global admin email address"
     Try{Connect-IPPSSession -UserPrincipalName $GlobalAdmin}
     Catch [System.AggregateException] {
@@ -63,7 +63,7 @@ While($true){
     Clear-Host
     Write-Host "M365 Content Search Tool`n" -ForegroundColor Green
     Write-Host "`nModes:`n1. Start New Search`n2. Check Existing Cases & Start New Export Job`n3. Check Existing Export Jobs`n4. Exit"
-    Write-Host "`nLogged in as GlobalAdmin account: " -NoNewLine
+    Write-Host "`nLogged in as Global Admin account: " -NoNewLine
     Write-Host "$GlobalAdmin" -ForegroundColor Green
     $InitialMenuSelection = Read-Host "`nPlease enter selection"
 
