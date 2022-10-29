@@ -1,3 +1,23 @@
+<#
+.SYNOPSIS
+    This script provides a convenient front-end for creating new content searches in M365 Compliance/Purview from Powershell.
+.DESCRIPTION
+    This tool provides the following options:
+    - Start a single user search, retreiving all emails and/or Teams messages the user sent and received (during a specified timeframe, or without a specified date range).
+    - Start a multi-user search, retreiving all emails and/or Teams messages sent and received between the users specified in the search (during a specified timeframe, or without a specified date range).
+    - Check on status of existing content searches & start export job from existing content searches
+    - Check on status of existing content search export jobs
+
+    The tool also allows you to input KQL search queries when creating new content searches (Note: There is no input validation on KQL search queries).
+.NOTES
+    @Author: Will Opie
+    @Initial Date: 2022-09-30
+    @Version: 2022-10-29
+
+    This script requires the Exchange Online Powershell module to function (https://www.powershellgallery.com/packages/ExchangeOnlineManagement)
+#>
+
+#region Functions ------------------------------------------------------------------------------------------------
 Function pause ($message)
 {
     # Check if running Powershell ISE
@@ -12,6 +32,8 @@ Function pause ($message)
         $null = $host.ui.RawUI.ReadKey("NoEcho,IncludeKeyDown")
     }
 }
+#endregion Functions --------------------------------------------------------------------------------------------------
+
 #Set current PS Session to TLS 1.2
 $TLS12Protocol = [System.Net.SecurityProtocolType] 'Ssl3 , Tls12'
 [System.Net.ServicePointManager]::SecurityProtocol = $TLS12Protocol
@@ -24,7 +46,7 @@ Import-Module ExchangeOnlineManagement
 Clear-Host
 
 Do{
-    Write-Host "M365 Content Search Tool`n" -ForegroundColor Green
+    Write-Host "M365 Content Search Tool`n" -ForegroundColor GreenGet
     $GlobalAdmin = Read-Host "Enter global admin email address"
     Try{Connect-IPPSSession -UserPrincipalName $GlobalAdmin}
     Catch [System.AggregateException] {
@@ -35,12 +57,13 @@ Do{
     $ActiveSession = Get-PSSession
 } Until ($ActiveSession)
 Connect-ExchangeOnline -UserPrincipalName $GlobalAdmin
+Clear-Host
 
 While($true){
     Clear-Host
     Write-Host "M365 Content Search Tool`n" -ForegroundColor Green
     Write-Host "`nModes:`n1. Start New Search`n2. Check Existing Cases & Start New Export Job`n3. Check Existing Export Jobs`n4. Exit"
-    Write-Host "`nLogged in as global admin account: " -NoNewLine
+    Write-Host "`nLogged in as GlobalAdmin account: " -NoNewLine
     Write-Host "$GlobalAdmin" -ForegroundColor Green
     $InitialMenuSelection = Read-Host "`nPlease enter selection"
 
@@ -54,16 +77,36 @@ While($true){
                 Switch($NewSearchMenu){
                     1{
                         $Date = $Null
+                        $DateKQL = $Null
+                        $DateQuerySuccess = $False
                         $Participant = $Null
                         $Mailbox = $Null
                         $ParticipantKQL = $Null
-                        $DateKQL = $Null
+                        $RawKQL = $Null
                         $KQLQuery = $Null
                         $SearchSuccess = $True
                         Clear-Host
                         Write-Host "Single User Search`n" -ForegroundColor Yellow
                         $NewSearchName = Read-Host "Please enter a name for the new Content Search"
-                        $Date = Read-Host "`nPlease enter a date range for the search. Write date range in YYYY-MM-DD format, with two periods between dates. (ex. 2021-07-01..2022-09-15)"
+                        While($true){
+                            Write-Host "`nPlease enter a date range for the search.`nWrite date range in YYYY-MM-DD format, with two periods between dates. (ex. 2021-07-01..2022-09-15)"
+                            Write-Host "If you would like to search without a date range, enter N/A`n"
+                            $Date = Read-Host "Please enter date range"
+                            switch -Regex ($Date) {
+                                '(20[0-9]{2})-(0[1-9]|[1][0-2])-([3][0-1]|[1-2][0-9]|0[1-9])\.\.(20[0-9]{2})-(0[1-9]|[1][0-2])-([3][0-1]|[1-2][0-9]|0[1-9])'{
+                                    $DateKQL = ("(Date=$Date)")
+                                    $DateQuerySuccess = $True
+                                }
+                                '[nN]\/[aA]'{
+                                    $DateQuerySuccess = $True
+                                }
+                                Default{
+                                    Clear-Host
+                                    Write-Host "Invalid input. Try again."
+                                }
+                            }
+                            If($DateQuerySuccess){Break}
+                        }
                         Do{
                             Do{
                                 $Participant = Read-Host "Please enter the email address of the user whose messages you would like to search"
@@ -76,7 +119,6 @@ While($true){
                                 }
                             }Until($Null -ne $Mailbox)
                             $ParticipantKQL = ("(Participants:$Participant)")
-                            $DateKQL = ("(Date=$Date)")
                             #Write-Output $Participant
                             Write-Host "Is this the correct email address: " -NoNewLine
                             Write-Host "$Participant" -ForegroundColor Yellow -NoNewLine
@@ -84,7 +126,7 @@ While($true){
                         }Until($Confirmation -eq 'y')
                         $KQLQuery = ($DateKQL + $ParticipantKQL)
                         Do{
-                            $EmailSearchCheck = Read-Host "Would you like to filter your search for email messages? Y/N"
+                            $EmailSearchCheck = Read-Host "`nWould you like to filter your search for email messages? Y/N"
                             switch($EmailSearchCheck){
                                 'Y'{
                                     $KQLQuery += "(kind:email)"
@@ -99,7 +141,7 @@ While($true){
                             }
                         }Until($EmailSearchCheck -like "[y|n]")
                         Do{
-                            $TeamsSearchCheck = Read-Host "Would you like to filter your search for Teams messages? Y/N"
+                            $TeamsSearchCheck = Read-Host "`nWould you like to filter your search for Teams messages? Y/N"
                             switch($TeamsSearchCheck){
                                 'Y'{
                                     $KQLQuery += "(kind:im)"
@@ -113,6 +155,23 @@ While($true){
                                 }
                             }
                         }Until($TeamsSearchCheck -like "[y|n]")
+                        Do{
+                            $RawKQLCheck = Read-Host "`nWould you like to input a custom KQL query? Y/N"
+                            switch($RawKQLCheck){
+                                'Y'{
+                                    Write-Host "NOTE: Custom KQL queries do not have input validation." -BackgroundColor Yellow
+                                    $RawKQL = Read-Host "`nEnter your custom KQL query here"
+                                    $KQLQuery += $RawKQL
+                                }
+                                'N'{
+                                    Break
+                                }
+                                Default{
+                                    Clear-Host
+                                    Write-Host "`nInvalid input. Please enter y or n.`n" -BackgroundColor Yellow -ForegroundColor Red
+                                }
+                            }
+                        }Until($RawKQLCheck -like "[y|n]")
                         New-ComplianceSearch -Name "$NewSearchName" -ExchangeLocation "$Participant" -ContentMatchQuery "$KQLQuery" | Format-Table
                         Start-Sleep -Seconds 3
                         Clear-Host
@@ -132,17 +191,39 @@ While($true){
                         pause "`nPress any key to return to the main menu."
                     }
                     2{
+                        $Date = $Null
+                        $DateKQL = $Null
+                        $DateQuerySuccess = $False
                         $Response = $Null
                         $Mailbox = $Null
                         $MailboxList = @()
                         $SenderKQL = $Null
                         $RecipientKQL = $Null
+                        $RawKQL = $Null
                         $KQLQuery = $Null
                         $SearchSuccess = $True
                         Clear-Host
                         Write-Host "Multi-User Search`n" -ForegroundColor Yellow
                         $NewSearchName = Read-Host "Please enter a name for the new Content Search"
-                        $Date = Read-Host "`nPlease enter a date range for the search. Write date range in YYYY-MM-DD format, with two periods between dates. (ex. 2021-07-01..2022-09-15)"
+                        While($true){
+                            Write-Host "`nPlease enter a date range for the search.`nWrite date range in YYYY-MM-DD format, with two periods between dates. (ex. 2021-07-01..2022-09-15)"
+                            Write-Host "If you would like to search without a date range, enter N/A`n"
+                            $Date = Read-Host "Please enter date range"
+                            switch -Regex ($Date) {
+                                '(20[0-9]{2})-(0[1-9]|[1][0-2])-([3][0-1]|[1-2][0-9]|0[1-9])\.\.(20[0-9]{2})-(0[1-9]|[1][0-2])-([3][0-1]|[1-2][0-9]|0[1-9])'{
+                                    $DateKQL = ("(Date=$Date)")
+                                    $DateQuerySuccess = $True
+                                }
+                                '[nN]\/[aA]'{
+                                    $DateQuerySuccess = $True
+                                }
+                                Default{
+                                    Clear-Host
+                                    Write-Host "Invalid input. Try again."
+                                }
+                            }
+                            If($DateQuerySuccess){Break}
+                        }
                         Do{
                             Do{
                                 Do{
@@ -160,13 +241,13 @@ While($true){
                                 $RecipientKQL += ("(recipients:$Mailbox)")
                                 $Response = Read-Host "`nAre there any additional mailboxes you would like to search? Y/N"
                             } Until($Response -eq 'n')
+                            Clear-Host
                             Write-Output $MailboxList
-                            $Confirmation = Read-Host "Are these all of the mailboxes you would like to search? Y/N"
+                            $Confirmation = Read-Host "`nAre these all of the mailboxes you would like to search? Y/N"
                         }Until($Confirmation -eq 'y')
-                        $DateKQL = ("(Date=$Date)")
                         $KQLQuery = ($SenderKQL + $RecipientKQL + $DateKQL)
                         Do{
-                            $EmailSearchCheck = Read-Host "Would you like to filter your search for email messages? Y/N"
+                            $EmailSearchCheck = Read-Host "`nWould you like to filter your search for email messages? Y/N"
                             switch($EmailSearchCheck){
                                 'Y'{
                                     $KQLQuery += "(kind:email)"
@@ -181,7 +262,7 @@ While($true){
                             }
                         }Until($EmailSearchCheck -like "[y|n]")
                         Do{
-                            $TeamsSearchCheck = Read-Host "Would you like to filter your search for Teams messages? Y/N"
+                            $TeamsSearchCheck = Read-Host "`nWould you like to filter your search for Teams messages? Y/N"
                             switch($TeamsSearchCheck){
                                 'Y'{
                                     $KQLQuery += "(kind:im)"
@@ -195,6 +276,23 @@ While($true){
                                 }
                             }
                         }Until($TeamsSearchCheck -like "[y|n]")
+                        Do{
+                            $RawKQLCheck = Read-Host "`nWould you like to input a custom KQL query? Y/N"
+                            switch($RawKQLCheck){
+                                'Y'{
+                                    Write-Host "NOTE: Custom KQL queries do not have input validation." -BackgroundColor Yellow
+                                    $RawKQL = Read-Host "`nEnter your custom KQL query here"
+                                    $KQLQuery += $RawKQL
+                                }
+                                'N'{
+                                    Break
+                                }
+                                Default{
+                                    Clear-Host
+                                    Write-Host "`nInvalid input. Please enter y or n.`n" -BackgroundColor Yellow -ForegroundColor Red
+                                }
+                            }
+                        }Until($RawKQLCheck -like "[y|n]")
                         New-ComplianceSearch -Name "$NewSearchName" -ExchangeLocation $MailboxList -ContentMatchQuery "$KQLQuery"
                         Start-Sleep -Seconds 3
                         Start-ComplianceSearch -Identity "$NewSearchName"
@@ -227,7 +325,7 @@ While($true){
             Clear-Host
             Do{
                 Write-Host "Existing Case Search/Start Export Job`n" -ForegroundColor Yellow
-                Write-Host "Below are all existing Content Search cases:`n"
+                Write-Host "Below are all existing Content Search cases for this tenant:`n"
                 Get-ComplianceSearch | Format-Table
                 $SearchMenuSelection = Read-Host "`nWould you like to start an export for one of the above content searches? Y/N"
                     Switch($SearchMenuSelection){
