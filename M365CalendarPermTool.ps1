@@ -13,7 +13,7 @@
 .NOTES
     @Author: Will Opie
     @Initial Date: 2022-11-25
-    @Version: 2022-11-25
+    @Version: 2023-03-31
 #>
 #region Functions ------------------------------------------------------------------------------------------------
 Function pause ($message)
@@ -101,9 +101,18 @@ Function Get-CalendarPermsReport
 $global:MailboxCount = 0
 $global:ReportSize = 0
 
+#Verifies ExchangeOnlineManagement module is installed before proceeding
+if ($null -eq (Get-Module -ListAvailable -Name ExchangeOnlineManagement)){
+    Write-Host "ExchangeOnlineManagement module is not installed. Script requires this module to function." -ForegroundColor Yellow -BackgroundColor Red
+    Write-Host "Please install the ExchangeOnlineManagement module and try again." -ForegroundColor Yellow
+    Pause "`nPress any key to exit."
+    Exit
+}
+
 #Set current PS Session to TLS 1.2
 $TLS12Protocol = [System.Net.SecurityProtocolType] 'Ssl3 , Tls12'
 [System.Net.ServicePointManager]::SecurityProtocol = $TLS12Protocol
+
 #Removes any active PS Sessions before starting script
 $SessionCheck = Get-PSSession
 If($Null -ne $SessionCheck){
@@ -121,7 +130,13 @@ Do{
         Write-Host "Invalid entry for Global Admin account. Please try again." -ForegroundColor Red -BackgroundColor Yellow
         $GlobalAdmin = $Null
     }
-    $ActiveSession = Get-PSSession
+    #Checks if current ExchangeOnlineModule is greater than or equal to version 3
+	If($ExchangeOnlineModuleVer -ge 3.0.0){
+		$ActiveSession = (Get-ConnectionInformation).ConnectionUri
+	}
+	Else{
+		$ActiveSession = Get-PSSession
+	}
 } Until ($ActiveSession)
 Clear-Host
 
@@ -387,74 +402,99 @@ While($true){
             
         }
         2{
+            $DefaultPermSelection = $Null
             $PermRole = $Null
             $PermRoleSelection = $Null
-            Clear-Host
-            Write-Host "Tenant-Wide Default User Permissions Change`n" -ForegroundColor Cyan
-            Write-Host "Default user currently has the following access to below users' mailboxes:`n`n"
-            $MailboxList = @()
-            $MailboxList += (Get-Mailbox -RecipientTypeDetails UserMailbox)
-            ForEach($User in Get-Mailbox -RecipientTypeDetails UserMailbox){
-                $cal = $user.alias+":\Calendar"
-                $perms = (Get-MailboxFolderPermission -Identity $cal -User Default).AccessRights
-                Write-Host "Default" -NoNewline -ForegroundColor Cyan
-                Write-Host " user has " -NoNewLine
-                Write-Host "$perms" -ForegroundColor Yellow -NoNewline 
-                Write-Host " access to " -NoNewLine
-                Write-Host "$user" -ForegroundColor Green -NoNewline
-                Write-Host "'s calendar"
-            }
             Do{
-                Write-Host "`nPlease select the desired Default user permissions level for all users calendars:`n"
-                Write-Host "1. Owner: Allows read, create, modify and delete all items and folders. Also allows manage items permissions."
-                Write-Host "2. PublishingEditor: Allows read, create, modify and delete items/subfolders."
-                Write-Host "3. Editor: Allows read, create, modify and delete items."
-                Write-Host "4. PublishingAuthor: Allows read, create all items/subfolders. User can modify and delete only items they have created."
-                Write-Host "5. Author: Allows create and read items; edit and delete own items."
-                Write-Host "6. NonEditingAuthor: Allows full read access and create items. User can delete only their own items."
-                Write-Host "7. Reviewer: Read only."
-                Write-Host "8. Contributor: Allows user to create items and folders."
-                Write-Host "9. AvailabilityOnly: Allows read free/busy information from calendar."
-                Write-Host "10. None: No permissions to access folder and files."
-                $PermRoleSelection = Read-Host "`nEnter desired access level for Default user"
-                switch($PermRoleSelection){
-                    1{$PermRole = "Owner"}
-                    2{$PermRole = "PublishingEditor"}
-                    3{$PermRole = "Editor"}
-                    4{$PermRole = "PublishingAuthor"}
-                    5{$PermRole = "Author"}
-                    6{$PermRole = "NonEditingAuthor"}
-                    7{$PermRole = "Reviewer"}
-                    8{$PermRole = "Contributor"}
-                    9{$PermRole = "AvailabilityOnly"}
-                    10{$PermRole = "None"}
-                    Default{
+                Clear-Host
+                Write-Host "Tenant-Wide Default User Permissions Change`n" -ForegroundColor Cyan
+                Write-Host "Please select from the following options:`n"
+                Write-Host "1. View Default User access for All User Mailbox Calendars"
+                Write-Host "2. Set Default User Permissions for All User Mailbox Calendars"
+                Write-Host "3. Return to main menu"
+                $DefaultPermSelection = Read-Host "`nEnter your selection here"
+                switch($DefaultPermSelection){
+                    1{
                         Clear-Host
-                        Write-Host "Invalid selection. Please try again.`n`n" -BackgroundColor Yellow -ForegroundColor Red
+                        Write-Host "Default User currently has the following access to the below users' mailbox calendars:`n`n"
+                        $MailboxList = @()
+                        $MailboxList += (Get-Mailbox -RecipientTypeDetails UserMailbox)
+                        ForEach($User in Get-Mailbox -RecipientTypeDetails UserMailbox){
+                            $cal = $user.alias+":\Calendar"
+                            $perms = (Get-MailboxFolderPermission -Identity $cal -User Default).AccessRights
+                            Write-Host "Default" -NoNewline -ForegroundColor Cyan
+                            Write-Host " user has " -NoNewLine
+                            Write-Host "$perms" -ForegroundColor Yellow -NoNewline 
+                            Write-Host " access to " -NoNewLine
+                            Write-Host "$user" -ForegroundColor Green -NoNewline
+                            Write-Host "'s calendar"
+                        }
+                    }
+                    2{
+                        Clear-Host
+                        Do{
+                            Write-Host "Set Default User Permissions for All User Tenant Mailboxes" -ForegroundColor Yellow
+                            Write-Host "`nPlease select the desired Default User permissions level for all users calendars:`n"
+                            Write-Host "1. Owner: Allows read, create, modify and delete all items and folders. Also allows manage items permissions."
+                            Write-Host "2. PublishingEditor: Allows read, create, modify and delete items/subfolders."
+                            Write-Host "3. Editor: Allows read, create, modify and delete items."
+                            Write-Host "4. PublishingAuthor: Allows read, create all items/subfolders. User can modify and delete only items they have created."
+                            Write-Host "5. Author: Allows create and read items; edit and delete own items."
+                            Write-Host "6. NonEditingAuthor: Allows full read access and create items. User can delete only their own items."
+                            Write-Host "7. Reviewer: Read only."
+                            Write-Host "8. Contributor: Allows user to create items and folders."
+                            Write-Host "9. AvailabilityOnly: Allows read free/busy information from calendar."
+                            Write-Host "10. None: No permissions to access folder and files."
+                            $PermRoleSelection = Read-Host "`nEnter desired access level for Default user"
+                            switch($PermRoleSelection){
+                                1{$PermRole = "Owner"}
+                                2{$PermRole = "PublishingEditor"}
+                                3{$PermRole = "Editor"}
+                                4{$PermRole = "PublishingAuthor"}
+                                5{$PermRole = "Author"}
+                                6{$PermRole = "NonEditingAuthor"}
+                                7{$PermRole = "Reviewer"}
+                                8{$PermRole = "Contributor"}
+                                9{$PermRole = "AvailabilityOnly"}
+                                10{$PermRole = "None"}
+                                Default{
+                                    Clear-Host
+                                    Write-Host "Invalid selection. Please try again.`n`n" -BackgroundColor Yellow -ForegroundColor Red
+                                }
+                            }
+                        }Until($PermRoleSelection -like "[1/2/3/4/5/6/7/8/9/10]")
+                        ForEach($User in Get-Mailbox -RecipientTypeDetails UserMailbox){
+                            $cal = $user.alias+":\Calendar"
+                            Set-MailboxFolderPermission -Identity $cal -User Default -AccessRights $PermRole
+                        }
+                        Write-Host "`n`nChecking access permissions for " -NoNewline
+                        Write-Host "Default user" -ForegroundColor Green -NoNewline
+                        Write-Host " after change..."
+                        $PostAccessCheck = (Get-MailboxFolderPermission -identity ($MailboxList.Name[0] + ":\Calendar") -User Default).AccessRights
+                        If($PermRole -eq $PostAccessCheck){
+                            Write-Host "`nSUCCESS: Permissions change succeeded!" -BackgroundColor Green -ForegroundColor White
+                            Write-Host "Default user" -ForegroundColor Green -NoNewLine
+                            Write-Host " now has " -NoNewline
+                            Write-Host "$PermRole" -ForegroundColor Cyan -NoNewLine
+                            Write-Host " access to all user calendars." -ForegroundColor Green -NoNewline
+                        }
+                        Else{
+                            Write-Host "`nERROR: Permissions change failed!" -BackgroundColor Red -ForegroundColor Yellow
+                            Write-Host "`nDefault user" -ForegroundColor Yellow -NoNewLine
+                            Write-Host " has the following access to user mailboxes: " -NoNewLine
+                            Write-Host "$PostAccessCheck" -ForegroundColor Red -NoNewline
+                        }
+                    }
+                    3{
+                        Clear-Host
+                    }
+                    Default{
+                        Write-Host "Invalid selection. Please try again." -BackgroundColor Yellow -ForegroundColor Red
+                        Start-Sleep -Seconds 3
+                        Clear-Host
                     }
                 }
-            }Until($PermRoleSelection -like "[1/2/3/4/5/6/7/8/9/10]")
-            ForEach($User in Get-Mailbox -RecipientTypeDetails UserMailbox){
-                $cal = $user.alias+":\Calendar"
-                Set-MailboxFolderPermission -Identity $cal -User Default -AccessRights $PermRole
-            }
-            Write-Host "`n`nChecking access permissions for " -NoNewline
-            Write-Host "Default user" -ForegroundColor Green -NoNewline
-            Write-Host " after change..."
-            $PostAccessCheck = (Get-MailboxFolderPermission -identity ($MailboxList.Name[0] + ":\Calendar") -User Default).AccessRights
-            If($PermRole -eq $PostAccessCheck){
-                Write-Host "`nSUCCESS: Permissions change succeeded!" -BackgroundColor Green -ForegroundColor White
-                Write-Host "Default user" -ForegroundColor Green -NoNewLine
-                Write-Host " now has " -NoNewline
-                Write-Host "$PermRole" -ForegroundColor Cyan -NoNewLine
-                Write-Host " access to all user calendars." -ForegroundColor Green -NoNewline
-            }
-            Else{
-                Write-Host "`nERROR: Permissions change failed!" -BackgroundColor Red -ForegroundColor Yellow
-                Write-Host "`nDefault user" -ForegroundColor Yellow -NoNewLine
-                Write-Host " has the following access to user mailboxes: " -NoNewLine
-                Write-Host "$PostAccessCheck" -ForegroundColor Red -NoNewline
-            }
+            }Until($DefaultPermSelection -like "[1/2/3]")
             Pause "`nPress any key to return to the main menu."
         }
         3{
