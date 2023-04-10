@@ -130,13 +130,7 @@ Do{
         Write-Host "Invalid entry for Global Admin account. Please try again." -ForegroundColor Red -BackgroundColor Yellow
         $GlobalAdmin = $Null
     }
-    #Checks if current ExchangeOnlineModule is greater than or equal to version 3
-	If($ExchangeOnlineModuleVer -ge 3.0.0){
-		$ActiveSession = (Get-ConnectionInformation).ConnectionUri
-	}
-	Else{
-		$ActiveSession = Get-PSSession
-	}
+	$ActiveSession = Get-PSSession
 } Until ($ActiveSession)
 Clear-Host
 
