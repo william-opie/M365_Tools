@@ -130,7 +130,7 @@ Do{
         Write-Host "Invalid entry for Global Admin account. Please try again." -ForegroundColor Red -BackgroundColor Yellow
         $GlobalAdmin = $Null
     }
-	$ActiveSession = Get-PSSession
+    $ActiveSession = Get-PSSession
 } Until ($ActiveSession)
 Clear-Host
 
