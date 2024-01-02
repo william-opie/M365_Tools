@@ -13,10 +13,10 @@
 .NOTES
     @Author: Will Opie
     @Initial Date: 2022-11-25
-    @Version: 2023-03-31
+    @Version: 2024-01-01
 #>
 #region Functions ------------------------------------------------------------------------------------------------
-Function pause ($message)
+Function Exit-Prompt ($message)
 {
     # Check if running Powershell ISE
     if ($psISE)
@@ -105,18 +105,14 @@ $global:ReportSize = 0
 if ($null -eq (Get-Module -ListAvailable -Name ExchangeOnlineManagement)){
     Write-Host "ExchangeOnlineManagement module is not installed. Script requires this module to function." -ForegroundColor Yellow -BackgroundColor Red
     Write-Host "Please install the ExchangeOnlineManagement module and try again." -ForegroundColor Yellow
-    Pause "`nPress any key to exit."
+    Exit-Prompt "`nPress any key to exit."
     Exit
 }
 
-#Set current PS Session to TLS 1.2
-$TLS12Protocol = [System.Net.SecurityProtocolType] 'Ssl3 , Tls12'
-[System.Net.ServicePointManager]::SecurityProtocol = $TLS12Protocol
-
-#Removes any active PS Sessions before starting script
-$SessionCheck = Get-PSSession
+#Removes any active ExchangeOnline connections before starting script
+$SessionCheck = Get-ConnectionInformation | Where-Object {$_.Name -match 'ExchangeOnline' -and $_.state -eq 'Connected'}
 If($Null -ne $SessionCheck){
-    Get-PSSession | Remove-PSSession; Disconnect-ExchangeOnline
+    Disconnect-ExchangeOnline
 }
 Import-Module ExchangeOnlineManagement
 Clear-Host
@@ -124,13 +120,8 @@ Clear-Host
 Do{
     Write-Host "M365 Calendar Perms Tool`n" -ForegroundColor Green
     $GlobalAdmin = Read-Host "Please enter a Global Admin email address"
-    Try{Connect-ExchangeOnline -UserPrincipalName $GlobalAdmin}
-    Catch [System.AggregateException] {
-        Clear-Host
-        Write-Host "Invalid entry for Global Admin account. Please try again." -ForegroundColor Red -BackgroundColor Yellow
-        $GlobalAdmin = $Null
-    }
-    $ActiveSession = Get-PSSession
+    Connect-ExchangeOnline -UserPrincipalName $GlobalAdmin -ShowBanner:$false
+    $ActiveSession = Get-ConnectionInformation | Where-Object {$_.Name -match 'ExchangeOnline' -and $_.state -eq 'Connected'}
 } Until ($ActiveSession)
 Clear-Host
 
@@ -186,7 +177,7 @@ While($true){
                                 Break
                             }
                         }
-                        Pause "`nPress any key to return to the main menu."
+                        Exit-Prompt "`nPress any key to return to the main menu."
                     }
                     2{
                         Clear-Host
@@ -295,7 +286,7 @@ While($true){
                             Write-Host "'s calendar: " -NoNewline
                             Write-Host "$PostAccessCheck`n" -ForegroundColor Cyan
                         }
-                        Pause "`nPress any key to return to the main menu."
+                        Exit-Prompt "`nPress any key to return to the main menu."
                     }
                     3{
                         Clear-Host
@@ -385,7 +376,7 @@ While($true){
                             Write-Host "$Mailbox" -ForegroundColor Green -NoNewline
                             Write-Host "'s calendar. No need to delete user access perms."
                         }
-                        Pause "`nPress any key to return to the main menu."
+                        Exit-Prompt "`nPress any key to return to the main menu."
                     }
                     Default{
                         Clear-Host
@@ -489,7 +480,7 @@ While($true){
                     }
                 }
             }Until($DefaultPermSelection -like "[1/2/3]")
-            Pause "`nPress any key to return to the main menu."
+            Exit-Prompt "`nPress any key to return to the main menu."
         }
         3{
             Clear-Host
@@ -522,7 +513,7 @@ While($true){
             Else{
                 Write-Host "Failed to export tenant-wide calendar permissions report successfully." -ForegroundColor Yellow -BackgroundColor Red
             }
-            Pause "Press any key to return to the main menu."
+            Exit-Prompt "Press any key to return to the main menu."
         }
         4{Exit}
         default{

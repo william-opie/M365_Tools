@@ -12,13 +12,13 @@
 .NOTES
     @Author: Will Opie
     @Initial Date: 2022-09-30
-    @Version: 2022-10-29
+    @Version: 2024-01-01
 
     This script requires the Exchange Online Powershell module to function (https://www.powershellgallery.com/packages/ExchangeOnlineManagement)
 #>
 
 #region Functions ------------------------------------------------------------------------------------------------
-Function pause ($message)
+Function Exit-Prompt ($message)
 {
     # Check if running Powershell ISE
     if ($psISE)
@@ -34,13 +34,18 @@ Function pause ($message)
 }
 #endregion Functions --------------------------------------------------------------------------------------------------
 
-#Set current PS Session to TLS 1.2
-$TLS12Protocol = [System.Net.SecurityProtocolType] 'Ssl3 , Tls12'
-[System.Net.ServicePointManager]::SecurityProtocol = $TLS12Protocol
-#Removes any active PS Sessions before starting script
-$SessionCheck = Get-PSSession
+#Verifies ExchangeOnlineManagement module is installed before proceeding
+if ($null -eq (Get-Module -ListAvailable -Name ExchangeOnlineManagement)){
+    Write-Host "ExchangeOnlineManagement module is not installed. Script requires this module to function." -ForegroundColor Yellow -BackgroundColor Red
+    Write-Host "Please install the ExchangeOnlineManagement module and try again." -ForegroundColor Yellow
+    Exit-Prompt "`nPress any key to exit."
+    Exit
+}
+
+#Removes any active ExchangeOnline connections before starting script
+$SessionCheck = Get-ConnectionInformation | Where-Object {$_.Name -match 'ExchangeOnline' -and $_.state -eq 'Connected'}
 If($Null -ne $SessionCheck){
-    Get-PSSession | Remove-PSSession; Disconnect-ExchangeOnline
+    Disconnect-ExchangeOnline
 }
 Import-Module ExchangeOnlineManagement
 Clear-Host
@@ -48,15 +53,10 @@ Clear-Host
 Do{
     Write-Host "M365 Content Search Tool`n" -ForegroundColor Green
     $GlobalAdmin = Read-Host "Enter global admin email address"
-    Try{Connect-IPPSSession -UserPrincipalName $GlobalAdmin}
-    Catch [System.AggregateException] {
-        Clear-Host
-        Write-Host "Invalid entry for global admin account. Please try again." -ForegroundColor Red -BackgroundColor Yellow
-        $GlobalAdmin = $Null
-    }
-    $ActiveSession = Get-PSSession
+    Connect-IPPSSession -UserPrincipalName $GlobalAdmin -ShowBanner:$false
+    $ActiveSession = Get-ConnectionInformation | Where-Object {$_.Name -match 'ExchangeOnline' -and $_.state -eq 'Connected'}
 } Until ($ActiveSession)
-Connect-ExchangeOnline -UserPrincipalName $GlobalAdmin
+Connect-ExchangeOnline -UserPrincipalName $GlobalAdmin -ShowBanner:$false
 Clear-Host
 
 While($true){
@@ -119,7 +119,6 @@ While($true){
                                 }
                             }Until($Null -ne $Mailbox)
                             $ParticipantKQL = ("(Participants:$Participant)")
-                            #Write-Output $Participant
                             Write-Host "Is this the correct email address: " -NoNewLine
                             Write-Host "$Participant" -ForegroundColor Yellow -NoNewLine
                             $Confirmation = Read-Host "? Y/N"
@@ -188,7 +187,7 @@ While($true){
                             Write-Host "$NewSearchName" -NoNewLine -ForegroundColor Red
                             Write-Host ". Please try running Content Search manually through the Compliance portal."
                         }
-                        pause "`nPress any key to return to the main menu."
+                        Exit-Prompt "`nPress any key to return to the main menu."
                     }
                     2{
                         $Date = $Null
@@ -308,11 +307,11 @@ While($true){
                             Write-Host "$NewSearchName" -NoNewLine -ForegroundColor Red
                             Write-Host ". Please try running Content Search manually through the Compliance portal."
                         }
-                        pause "`nPress any key to return to the main menu."
+                        Exit-Prompt "`nPress any key to return to the main menu."
                     }
                     3{
                         Write-Host "`nReturning to main menu...`n" -ForegroundColor Green
-                        pause "`nPress any key to return to the main menu."
+                        Exit-Prompt "`nPress any key to return to the main menu."
                     }
                     default{
                         Clear-Host
@@ -390,13 +389,13 @@ While($true){
                         }
                     }
             }Until($SearchMenuSelection -like "[y|n]")
-            pause "`nPress any key to return to the main menu."
+            Exit-Prompt "`nPress any key to return to the main menu."
         }
         3{
             Clear-Host
             Write-Host "List of Content Search Export Jobs`n" -ForegroundColor Yellow
             Get-ComplianceSearchAction | Format-Table
-            pause "`nPress any key to return to the main menu."
+            Exit-Prompt "`nPress any key to return to the main menu."
         }
         4{Exit}
         default{
